@@ -5,28 +5,47 @@ namespace GestaoRH.API.Middlewares;
 public class Auth
 {
     private readonly RequestDelegate _next;
-    private readonly IConfiguration  _config;
+    private readonly IConfiguration _config;
 
     private static readonly HashSet<string> RotasPublicas = new(StringComparer.OrdinalIgnoreCase)
     {
         "/api/empresa/cadastrar",
         "/api/empresa/login",
-        "/api/funcionario/login",    // login único para funcionario e chefe
+        "/api/funcionario/login",
+        "/aggregated-data",
+        "/people",
+        "/documents"
     };
 
-    public Auth(RequestDelegate next, IConfiguration config) { _next = next; _config = config; }
+    public Auth(RequestDelegate next, IConfiguration config)
+    {
+        _next = next;
+        _config = config;
+    }
 
     public async Task InvokeAsync(HttpContext context)
     {
         var path = (context.Request.Path.Value ?? string.Empty).TrimEnd('/').ToLowerInvariant();
+        var protegerRotasBff = _config.GetValue("BffSecurity:ProtectRoutes", false);
 
-        if (RotasPublicas.Contains(path)) { await _next(context); return; }
+        if (RotasPublicas.Contains(path) || path.StartsWith("/openapi") || path.StartsWith("/scalar"))
+        {
+            await _next(context);
+            return;
+        }
 
-        if (path.StartsWith("/api/"))
+        var deveAutenticar = path.StartsWith("/api/")
+            || (protegerRotasBff && (
+                path == "/aggregated-data"
+                || path.StartsWith("/people/")
+                || path.StartsWith("/documents/")));
+
+        if (deveAutenticar)
         {
             var header = context.Request.Headers["Authorization"].FirstOrDefault();
-            var token  = (header?.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) ?? false)
-                ? header["Bearer ".Length..].Trim() : null;
+            var token = (header?.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) ?? false)
+                ? header["Bearer ".Length..].Trim()
+                : null;
 
             if (string.IsNullOrWhiteSpace(token))
             {
@@ -49,4 +68,3 @@ public class Auth
         await _next(context);
     }
 }
-

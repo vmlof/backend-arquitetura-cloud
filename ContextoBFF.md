@@ -195,7 +195,7 @@ src
 |       `-- DownstreamServicesOptions.cs
 |-- appsettings.json
 |-- README.md
-`-- CONTEXTO_ETAPA_2_BFF.md
+`-- ContextoBFF.md
 ```
 
 ## Como o BFF ficou neste momento
@@ -325,7 +325,7 @@ Se precisarmos retomar rapido a etapa 2 depois, olhar primeiro:
 - `src/Infrastructure/Clients/FunctionBffClient.cs`
 - `appsettings.json`
 - `README.md`
-- `CONTEXTO_ETAPA_2_BFF.md`
+- `ContextoBFF.md`
 
 ## Observacao final
 
