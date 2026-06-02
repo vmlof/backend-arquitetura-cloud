@@ -1,126 +1,131 @@
-# GestaoRH-API
+# GestaoRH BFF
 
-Backend do Sistema de Gestão de Documentos de RH.  
-Stack: **.NET 9 · Dapper · PostgreSQL · JWT · BCrypt**
+Backend for Frontend em **ASP.NET Core / C#** para a entrega do item 2 do PJBL de Arquitetura.
 
----
+Este projeto foi adaptado para atuar como a camada intermediaria entre o microfrontend e os servicos de backend. Nesta etapa ele ja entrega a estrutura de **BFF**, com endpoints de agregacao e proxy, mantendo a base existente de **Clean Architecture** e **Vertical Slice**.
 
-## Pré-requisitos
+## Papel do projeto na arquitetura
 
-| Ferramenta | Versão mínima | Download |
+O BFF e o unico backend consumido pelo frontend. Ele concentra:
+
+- agregacao de dados para a tela principal
+- proxy de chamadas de `people`
+- proxy de chamadas de `documents`
+- ponto de integracao com Azure Function
+- isolamento do frontend em relacao aos microservicos reais
+
+## Endpoints BFF desta etapa
+
+Os endpoints abaixo ficam expostos sem o prefixo `/api`, porque sao os contratos esperados pelo microfrontend:
+
+| Metodo | Rota | Objetivo |
 |---|---|---|
-| .NET SDK | 9.0 | https://dotnet.microsoft.com/download |
-| PostgreSQL | 14+ | https://www.postgresql.org/download |
+| GET | `/aggregated-data` | Agrega dados de pessoas, documentos e function |
+| GET | `/people` | Lista pessoas para o frontend |
+| GET | `/people/{id}` | Detalhe de pessoa |
+| POST | `/people` | Proxy de criacao |
+| PUT | `/people/{id}` | Proxy de atualizacao |
+| DELETE | `/people/{id}` | Proxy de exclusao |
+| GET | `/documents` | Lista documentos para o frontend |
+| GET | `/documents/{id}` | Detalhe de documento |
+| POST | `/documents` | Proxy de criacao |
+| PUT | `/documents/{id}` | Proxy de atualizacao |
+| DELETE | `/documents/{id}` | Proxy de exclusao |
 
----
+## Como a integracao esta preparada
 
-## Configuração rápida
+Nesta fase o BFF roda em dois modos:
 
-### 1. Clone / abra o projeto
-```
-cd C:\Users\pcesa\OneDrive\PUC-BES\6 Semestre\ProjetoSemestre\GestaoRH-API
-```
+- `UseMocks = true`
+  - responde com dados mockados
+  - permite demonstrar o BFF antes dos microservicos existirem
+- `UseMocks = false`
+  - passa a usar `HttpClient`
+  - encaminha chamadas para os servicos configurados em `DownstreamServices`
 
-### 2. Crie o banco de dados no PostgreSQL
-```sql
-CREATE DATABASE "GestaoRHDB";
-```
+Configuracao atual em [appsettings.json](/C:/Users/pcesa/OneDrive/PUC-%20BES/6%20Semestre/Arquitetura/backend-arquitetura-cloud/appsettings.json:1):
 
-### 3. Rode o script inicial
-Abra o arquivo `Scripts/001_create_empresa.sql` no pgAdmin ou psql e execute.
-
-### 4. Configure a connection string
-Edite `appsettings.json` (ou `appsettings.Development.json`) e ajuste:
 ```json
-{
-  "ConnectionStrings": {
-    "DefaultConnection": "Host=localhost;Database=GestaoRHDB;Username=postgres;Password=SUA_SENHA"
-  },
-  "Jwt": {
-    "SecretKey": "coloque-uma-chave-secreta-longa-aqui-minimo-64-caracteres"
-  }
+"DownstreamServices": {
+  "UseMocks": true,
+  "PeopleBaseUrl": "http://localhost:5101/",
+  "DocumentsBaseUrl": "http://localhost:5102/",
+  "FunctionBaseUrl": "http://localhost:7071/",
+  "FunctionSummaryPath": "api/enrichment-summary"
 }
 ```
 
-### 5. Restaure os pacotes e rode
+Quando os microservicos e a Azure Function estiverem prontos, basta:
+
+1. alterar `UseMocks` para `false`
+2. apontar as URLs corretas
+3. alinhar os contratos dos payloads de `people` e `documents`
+
+## Estrutura arquitetural relevante
+
+```text
+src
+|-- API
+|   |-- Controllers
+|   |   |-- AggregatedDataController.cs
+|   |   |-- PeopleController.cs
+|   |   `-- DocumentsBffController.cs
+|-- Application
+|   |-- Common
+|   |   `-- Interfaces
+|   `-- Features
+|       `-- Bff
+|           |-- AggregatedData
+|           |-- People
+|           `-- Documents
+|-- Infrastructure
+|   |-- Clients
+|   |   |-- PeopleBffClient.cs
+|   |   |-- DocumentsBffClient.cs
+|   |   `-- FunctionBffClient.cs
+|   `-- Configuration
+|       `-- DownstreamServicesOptions.cs
 ```
+
+## Padroes aplicados
+
+- Clean Architecture
+  - `API`
+  - `Application`
+  - `Infrastructure`
+  - `Domain`
+- Vertical Slice
+  - slices separados para agregacao, people e documents
+- BFF
+  - endpoints orientados ao frontend
+  - composicao de respostas
+  - proxy para servicos downstream
+
+## Como rodar localmente
+
+### Pre-requisitos
+
+- .NET SDK 9
+
+### Execucao
+
+```bash
 dotnet restore
 dotnet run
 ```
 
-A API sobe em `http://localhost:5000`.  
-A UI de testes (Scalar) fica em `http://localhost:5000/scalar`.
+Documentacao OpenAPI:
 
----
+- JSON: `http://localhost:5000/openapi/v1.json`
+- Scalar: `http://localhost:5000/scalar`
 
-## Endpoints — Empresa
+## Observacoes importantes para a entrega
 
-| Método | Rota | Auth | Descrição |
-|--------|------|------|-----------|
-| POST | `/api/empresa/cadastrar` | ❌ | Cadastra nova empresa |
-| POST | `/api/empresa/login` | ❌ | Login, retorna JWT |
-| GET | `/api/empresa` | ✅ | Lista empresas |
-| GET | `/api/empresa/{id}` | ✅ | Busca empresa por ID |
-| PUT | `/api/empresa/{id}` | ✅ | Atualiza dados |
-| DELETE | `/api/empresa/{id}` | ✅ | Desativa empresa |
+- Este projeto agora representa o **BFF** da solucao.
+- A conexao real com os microservicos sera feita nas proximas etapas.
+- A parte de Azure Function aqui ja esta preparada por configuracao e cliente dedicado.
+- A API antiga do projeto ainda existe no repositorio, mas o foco academico desta etapa passa a ser o contrato BFF acima.
 
-### Exemplo de cadastro
-```json
-POST /api/empresa/cadastrar
-{
-  "cnpj": "12.345.678/0001-99",
-  "razaoSocial": "Empresa Exemplo Ltda",
-  "endereco": "Rua das Flores, 123 - Curitiba/PR",
-  "telefone": "(41) 99999-9999",
-  "logoBase64": null,
-  "responsavelNome": "João",
-  "responsavelSobrenome": "Silva",
-  "senha": "minhasenha123"
-}
-```
+## Alunos
 
-### Exemplo de login
-```json
-POST /api/empresa/login
-{
-  "cnpj": "12.345.678/0001-99",
-  "senha": "minhasenha123"
-}
-```
-Retorna `{ empresa: {...}, jwt: "eyJ..." }`.  
-Use o JWT no header das próximas requisições: `Authorization: Bearer <token>`
-
----
-
-## Estrutura de pastas
-
-```
-GestaoRH-API/
-├── Controllers/         # Recebe requests HTTP
-├── Middlewares/         # Auth.cs — validação JWT
-├── Models/
-│   ├── Empresa.cs
-│   └── DTOs/            # DTOs de entrada/saída
-├── Repositories/        # Acesso ao banco (Dapper)
-│   ├── IUnitOfWork.cs
-│   ├── UnitOfWork.cs
-│   ├── IEmpresaRepository.cs
-│   └── EmpresaRepository.cs
-├── Scripts/             # SQL de criação de tabelas
-├── Services/            # Regras de negócio
-├── Utils/               # Jwt.cs
-├── Program.cs
-└── appsettings.json
-```
-
----
-
-## Próximos módulos previstos
-
-- `Funcionario` — cadastro, grupos, setores
-- `Documento` — templates, versões, metadados
-- `Upload` — envio de atestados/comprovantes
-- `Aprovacao` — fluxo Enviado → Aprovado/Rejeitado
-- `AssinaturaEletronica` — PDF com evidências
-- `Notificacao` — email/push
-- `AuditoriaLog` — rastreabilidade completa
+Preencher com os nomes do grupo.

@@ -1,8 +1,12 @@
 using FluentValidation;
+using GestaoRH.Application.Common.Interfaces;
 using GestaoRH.API.Middlewares;
 using GestaoRH.Domain.Interfaces;
+using GestaoRH.Infrastructure.Clients;
+using GestaoRH.Infrastructure.Configuration;
 using GestaoRH.Infrastructure.Data;
 using GestaoRH.Infrastructure.Services;
+using Microsoft.Extensions.Options;
 using Scalar.AspNetCore;
 using System.Text.Json;
 
@@ -12,7 +16,11 @@ const string MyCors = "_myCors";
 builder.Services.AddCors(opts =>
 {
     opts.AddPolicy(MyCors, p =>
-        p.WithOrigins("http://localhost:5173")
+        p.SetIsOriginAllowed(origin =>
+            Uri.TryCreate(origin, UriKind.Absolute, out var uri)
+            && (uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+                || uri.Host.Equals("127.0.0.1"))
+            && uri.Port is >= 3000 and <= 5999)
          .AllowAnyHeader()
          .AllowAnyMethod());
 });
@@ -29,14 +37,40 @@ builder.Services.AddMediatR(cfg =>
 });
 
 // Register AutoMapper
-builder.Services.AddAutoMapper(typeof(Program).Assembly);
+builder.Services.AddAutoMapper(_ => { }, typeof(Program).Assembly);
 
 // Register FluentValidation
 builder.Services.AddValidatorsFromAssembly(typeof(Program).Assembly);
+builder.Services.Configure<DownstreamServicesOptions>(
+    builder.Configuration.GetSection(DownstreamServicesOptions.SectionName));
 
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<IJwtService, GestaoRH.Infrastructure.Security.JwtService>();
 builder.Services.AddSingleton<IPdfService, PdfService>();
+builder.Services.AddHttpClient<IBffPeopleClient, PeopleBffClient>((sp, client) =>
+{
+    var options = sp.GetRequiredService<IOptions<DownstreamServicesOptions>>().Value;
+    if (Uri.TryCreate(options.PeopleBaseUrl, UriKind.Absolute, out var baseUri))
+    {
+        client.BaseAddress = baseUri;
+    }
+});
+builder.Services.AddHttpClient<IBffDocumentsClient, DocumentsBffClient>((sp, client) =>
+{
+    var options = sp.GetRequiredService<IOptions<DownstreamServicesOptions>>().Value;
+    if (Uri.TryCreate(options.DocumentsBaseUrl, UriKind.Absolute, out var baseUri))
+    {
+        client.BaseAddress = baseUri;
+    }
+});
+builder.Services.AddHttpClient<IBffFunctionClient, FunctionBffClient>((sp, client) =>
+{
+    var options = sp.GetRequiredService<IOptions<DownstreamServicesOptions>>().Value;
+    if (Uri.TryCreate(options.FunctionBaseUrl, UriKind.Absolute, out var baseUri))
+    {
+        client.BaseAddress = baseUri;
+    }
+});
 
 var app = builder.Build();
 
