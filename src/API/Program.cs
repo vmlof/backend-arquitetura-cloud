@@ -1,6 +1,5 @@
 using FluentValidation;
 using GestaoRH.API.Middlewares;
-using GestaoRH.Application.Common.Services;
 using GestaoRH.Domain.Interfaces;
 using GestaoRH.Infrastructure.Data;
 using GestaoRH.Infrastructure.Services;
@@ -23,7 +22,11 @@ builder.Services.AddControllers()
 builder.Services.AddOpenApi();
 
 // Register MediatR
-builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(Program).Assembly));
+builder.Services.AddMediatR(cfg =>
+{
+    cfg.RegisterServicesFromAssembly(typeof(Program).Assembly);
+    cfg.AddOpenBehavior(typeof(GestaoRH.Application.Common.Behaviors.ValidationBehavior<,>));
+});
 
 // Register AutoMapper
 builder.Services.AddAutoMapper(typeof(Program).Assembly);
@@ -33,11 +36,7 @@ builder.Services.AddValidatorsFromAssembly(typeof(Program).Assembly);
 
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<IJwtService, GestaoRH.Infrastructure.Security.JwtService>();
-builder.Services.AddScoped<EmpresaService>();
-builder.Services.AddScoped<SetorService>();
-builder.Services.AddScoped<ModeloService>();
-builder.Services.AddScoped<DocumentoService>();
-builder.Services.AddSingleton<PdfService>();
+builder.Services.AddSingleton<IPdfService, PdfService>();
 
 var app = builder.Build();
 

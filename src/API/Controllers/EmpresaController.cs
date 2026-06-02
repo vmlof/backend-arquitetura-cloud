@@ -1,9 +1,11 @@
 using GestaoRH.Application.Common.DTOs;
-using GestaoRH.Infrastructure.Data;
-using GestaoRH.Domain.Interfaces;
-using GestaoRH.Application.Common.Services;
-using GestaoRH.Infrastructure.Services;
-using GestaoRH.Infrastructure.Security;
+using GestaoRH.Application.Features.Empresas.Commands.AtualizarEmpresa;
+using GestaoRH.Application.Features.Empresas.Commands.CadastrarEmpresa;
+using GestaoRH.Application.Features.Empresas.Commands.DesativarEmpresa;
+using GestaoRH.Application.Features.Empresas.Commands.LoginEmpresa;
+using GestaoRH.Application.Features.Empresas.Queries.ListarEmpresas;
+using GestaoRH.Application.Features.Empresas.Queries.ObterEmpresaPorId;
+using MediatR;
 using Microsoft.AspNetCore.Mvc;
 
 namespace GestaoRH.API.Controllers;
@@ -12,137 +14,67 @@ namespace GestaoRH.API.Controllers;
 [Route("api/[controller]")]
 public class EmpresaController : ControllerBase
 {
-    private readonly EmpresaService _empresaService;
-    private readonly IUnitOfWork _uof;
-    private readonly IConfiguration _config;
+    private readonly IMediator _mediator;
 
-    public EmpresaController(EmpresaService empresaService, IUnitOfWork uof, IConfiguration config)
+    public EmpresaController(IMediator mediator)
     {
-        _empresaService = empresaService;
-        _uof = uof;
-        _config = config;
+        _mediator = mediator;
     }
 
     /// <summary>Cadastra uma nova empresa (público)</summary>
     [HttpPost("cadastrar")]
-    public async Task<IActionResult> Cadastrar([FromBody] EmpresaCadastroDto dto)
+    public async Task<IActionResult> Cadastrar([FromBody] CadastrarEmpresaCommand command)
     {
-        try
-        {
-            if (dto is null) return BadRequest("Body vazio.");
-
-            var empresa = await _empresaService.Cadastrar(dto);
-            await _uof.CommitAsync();
-
-            return CreatedAtAction(
-                nameof(ObterPorId),
-                new { id = empresa.Id },
-                EmpresaService.ToResponse(empresa));
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(ex.Message);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Conflict(ex.Message);
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, ex.Message);
-        }
+        var result = await _mediator.Send(command);
+        return CreatedAtAction(nameof(ObterPorId), new { id = result.Id }, result);
     }
 
     /// <summary>Login da empresa — retorna JWT (público)</summary>
     [HttpPost("login")]
-    public async Task<IActionResult> Login([FromBody] EmpresaLoginDto dto)
+    public async Task<IActionResult> Login([FromBody] LoginEmpresaCommand command)
     {
-        try
-        {
-            if (dto is null) return BadRequest("Body vazio.");
-
-            var empresa = await _empresaService.Login(dto.Cnpj, dto.Senha);
-
-            return Ok(new
-            {
-                Empresa = EmpresaService.ToResponse(empresa),
-                Jwt     = Jwt.GenerateToken(empresa, _config)
-            });
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            return Unauthorized(ex.Message);
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, ex.Message);
-        }
+        var result = await _mediator.Send(command);
+        return Ok(result);
     }
 
     /// <summary>Retorna dados da empresa por ID (requer token)</summary>
     [HttpGet("{id:int}")]
     public async Task<IActionResult> ObterPorId(int id)
     {
-        try
-        {
-            var empresa = await _empresaService.ObterPorId(id);
-            return Ok(EmpresaService.ToResponse(empresa));
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(ex.Message);
-        }
+        var result = await _mediator.Send(new ObterEmpresaPorIdQuery(id));
+        return Ok(result);
     }
 
     /// <summary>Lista todas as empresas (requer token)</summary>
     [HttpGet]
     public async Task<IActionResult> Listar()
     {
-        var lista = await _empresaService.Listar();
-        return Ok(lista.Select(EmpresaService.ToResponse));
+        var result = await _mediator.Send(new ListarEmpresasQuery());
+        return Ok(result);
     }
 
     /// <summary>Atualiza dados da empresa (requer token)</summary>
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Atualizar(int id, [FromBody] EmpresaAtualizarDto dto)
     {
-        try
-        {
-            if (dto is null) return BadRequest("Body vazio.");
-
-            var empresa = await _empresaService.Atualizar(id, dto);
-            await _uof.CommitAsync();
-
-            return Ok(EmpresaService.ToResponse(empresa));
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(ex.Message);
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, ex.Message);
-        }
+        var command = new AtualizarEmpresaCommand(
+            id,
+            dto.RazaoSocial,
+            dto.Endereco,
+            dto.Telefone,
+            dto.LogoBase64,
+            dto.ResponsavelNome,
+            dto.ResponsavelSobrenome
+        );
+        var result = await _mediator.Send(command);
+        return Ok(result);
     }
 
     /// <summary>Desativa a empresa (requer token)</summary>
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Desativar(int id)
     {
-        try
-        {
-            await _empresaService.Desativar(id);
-            await _uof.CommitAsync();
-            return NoContent();
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(ex.Message);
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, ex.Message);
-        }
+        await _mediator.Send(new DesativarEmpresaCommand(id));
+        return NoContent();
     }
 }
-

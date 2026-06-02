@@ -1,9 +1,10 @@
+using GestaoRH.Domain.Interfaces;
 using PuppeteerSharp;
 using PuppeteerSharp.Media;
 
 namespace GestaoRH.Infrastructure.Services;
 
-public class PdfService
+public class PdfService : IPdfService
 {
     private static bool _browserBaixado = false;
     private static readonly SemaphoreSlim _lock = new(1, 1);

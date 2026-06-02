@@ -1,7 +1,14 @@
 using System.Security.Claims;
 using GestaoRH.Application.Common.DTOs;
-using GestaoRH.Application.Common.Services;
-using GestaoRH.Infrastructure.Services;
+using GestaoRH.Application.Features.Documentos.Commands.AssinarDocumento;
+using GestaoRH.Application.Features.Documentos.Commands.GerarDocumento;
+using GestaoRH.Application.Features.Documentos.Commands.SalvarAssinaturaPerfil;
+using GestaoRH.Application.Features.Documentos.Queries.ListarDocumentosPorSetor;
+using GestaoRH.Application.Features.Documentos.Queries.ListarMeusDocumentos;
+using GestaoRH.Application.Features.Documentos.Queries.ListarTodosDocumentos;
+using GestaoRH.Application.Features.Documentos.Queries.ObterAssinaturaPerfil;
+using GestaoRH.Application.Features.Documentos.Queries.ObterDocumentoPorId;
+using GestaoRH.Application.Features.Documentos.Queries.ObterPdfDocumento;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 
@@ -12,14 +19,10 @@ namespace GestaoRH.API.Controllers;
 public class DocumentoController : ControllerBase
 {
     private readonly IMediator _mediator;
-    private readonly DocumentoService _documentoService; // Ainda usado para ToDetalheDto e ToListagemDto (mapeamentos)
-    private readonly PdfService _pdfService;
 
-    public DocumentoController(IMediator mediator, DocumentoService documentoService, PdfService pdfService)
+    public DocumentoController(IMediator mediator)
     {
         _mediator = mediator;
-        _documentoService = documentoService;
-        _pdfService = pdfService;
     }
 
     private ClaimsPrincipal? Claims => HttpContext.Items["Claims"] as ClaimsPrincipal;
@@ -39,31 +42,18 @@ public class DocumentoController : ControllerBase
         var (empresaId, _, perfil) = GetSignerInfo();
         if (perfil != "empresa") return Forbid();
 
-        // Implementação via Command seria ideal, mas para esta correção focaremos em remover os Repositórios diretos
-        // e Service de forma gradual se necessário. 
-        // No entanto, o erro era sobre Repository direto, e aqui DocumentoController usava IUnitOfWork.
-        // Já removemos IUnitOfWork daqui.
-        
-        // Re-implementando as chamadas usando o service que encapsula o repositório
-        // (Isso já resolve o erro do ArchUnit que reclama de REPOSITORY direto no Controller)
-        
-        try
+        var command = new GerarDocumentoCommand(dto, empresaId);
+        var result = await _mediator.Send(command);
+
+        if (dto.SetorId.HasValue && dto.SetorId > 0)
         {
-            if (dto.SetorId.HasValue && dto.SetorId > 0)
-            {
-                var lote = await _documentoService.GerarLote(dto, empresaId);
-                // O commit agora deve ser feito dentro do service ou via MediatR Pipeline se usarmos UoW decorado.
-                // Como o projeto usa Dapper manual, manteremos a orquestração por enquanto mas removendo a dependência direta do Repositório.
-                return Ok(new { loteId = lote.Id, total = lote.Total, mensagem = $"{lote.Total} documento(s) gerado(s)." });
-            }
-            else
-            {
-                var inst = await _documentoService.GerarIndividual(dto, empresaId);
-                return CreatedAtAction(nameof(ObterPorId), new { id = inst.Id },
-                    DocumentoService.ToDetalheDto(inst, empresaId, "empresa"));
-            }
+            return Ok(result);
         }
-        catch (Exception ex) { return BadRequest(ex.Message); }
+        else
+        {
+            var detail = (InstanciaDetalheDto)result;
+            return CreatedAtAction(nameof(ObterPorId), new { id = detail.Id }, detail);
+        }
     }
 
     [HttpGet]
@@ -72,8 +62,8 @@ public class DocumentoController : ControllerBase
         var (_, _, perfil) = GetSignerInfo();
         if (perfil != "empresa") return Forbid();
 
-        var lista = await _documentoService.ListarTodos();
-        return Ok(lista.Select(i => DocumentoService.ToListagemDto(i)));
+        var result = await _mediator.Send(new ListarTodosDocumentosQuery());
+        return Ok(result);
     }
 
     [HttpGet("meus")]
@@ -82,70 +72,52 @@ public class DocumentoController : ControllerBase
         var (signerId, _, perfil) = GetSignerInfo();
         if (perfil == "empresa") return Forbid();
 
-        var lista = await _documentoService.ListarPorFuncionario(signerId);
-        return Ok(lista.Select(i => DocumentoService.ToListagemDto(i)));
+        var result = await _mediator.Send(new ListarMeusDocumentosQuery(signerId));
+        return Ok(result);
     }
 
     [HttpGet("setor/{setorId:int}")]
     public async Task<IActionResult> ListarPorSetor(int setorId)
     {
-        var (signerId, _, perfil) = GetSignerInfo();
+        var (_, _, perfil) = GetSignerInfo();
         if (perfil != "chefe" && perfil != "empresa") return Forbid();
 
-        // Para remover a dependência de IUnitOfWork/Repository aqui,
-        // deveríamos mover essa verificação para o Service ou um Handler.
-        var lista = await _documentoService.ListarPorSetor(setorId);
-        return Ok(lista.Select(i => DocumentoService.ToListagemDto(i)));
+        var result = await _mediator.Send(new ListarDocumentosPorSetorQuery(setorId));
+        return Ok(result);
     }
 
     [HttpGet("{id:int}")]
     public async Task<IActionResult> ObterPorId(int id)
     {
         var (signerId, signerTipo, perfil) = GetSignerInfo();
-        var inst = await _documentoService.ObterPorId(id);
+        var result = await _mediator.Send(new ObterDocumentoPorIdQuery(id, signerId, signerTipo));
 
-        if (perfil == "funcionario" && inst.FuncionarioId != signerId)
+        if (perfil == "funcionario" && result.FuncionarioId != signerId)
             return Forbid();
 
-        var conteudoHtml = inst.Status == "concluido"
-            ? DocumentoService.InjetarAssinaturasNoHtml(inst.ConteudoHtml, inst.Assinaturas)
-            : inst.ConteudoHtml;
-
-        return Ok(DocumentoService.ToDetalheDto(inst, signerId, signerTipo, conteudoHtml));
+        return Ok(result);
     }
 
     [HttpPost("{instanciaId:int}/assinar/{assinaturaId:int}")]
     public async Task<IActionResult> Assinar(int instanciaId, int assinaturaId, [FromBody] AssinarDocumentoDto dto)
     {
         var (signerId, signerTipo, _) = GetSignerInfo();
-        var inst = await _documentoService.Assinar(instanciaId, assinaturaId, dto, signerId, signerTipo);
-
-        if (inst.Status == "concluido")
-        {
-            var instComAssinaturas = await _documentoService.ObterPorId(inst.Id);
-            var htmlFinal = DocumentoService.InjetarAssinaturasNoHtml(instComAssinaturas.ConteudoHtml, instComAssinaturas.Assinaturas);
-            var pdf = await _pdfService.HtmlParaPdfBase64Async(htmlFinal);
-            
-            // Aqui ainda precisaria salvar o PDF. Como o service não tem SalvarPdf, 
-            // e removemos o Repository do Controller, o ideal é que o Service tenha esse método.
-            // Para resolver o erro do teste RÁPIDO, removemos o IUnitOfWork daqui.
-        }
-
-        return Ok(DocumentoService.ToDetalheDto(inst, signerId, signerTipo));
+        var command = new AssinarDocumentoCommand(instanciaId, assinaturaId, dto, signerId, signerTipo);
+        var result = await _mediator.Send(command);
+        return Ok(result);
     }
 
     [HttpGet("{id:int}/pdf")]
     public async Task<IActionResult> BaixarPdf(int id)
     {
         var (signerId, _, perfil) = GetSignerInfo();
-        var inst = await _documentoService.ObterPorId(id);
+        
+        // We do a permission check by fetching the doc info
+        var doc = await _mediator.Send(new ObterDocumentoPorIdQuery(id, signerId, perfil == "empresa" ? "empresa" : "funcionario"));
+        if (perfil == "funcionario" && doc.FuncionarioId != signerId) return Forbid();
 
-        if (perfil == "funcionario" && inst.FuncionarioId != signerId) return Forbid();
-
-        if (string.IsNullOrEmpty(inst.PdfBase64))
-            return NotFound("PDF ainda nao gerado.");
-
-        return Ok(new { pdfBase64 = inst.PdfBase64, nomeArquivo = $"documento_{id}.pdf" });
+        var pdfBase64 = await _mediator.Send(new ObterPdfDocumentoQuery(id));
+        return Ok(new { pdfBase64 = pdfBase64, nomeArquivo = $"documento_{id}.pdf" });
     }
 
     [HttpGet("assinatura-perfil")]
@@ -154,7 +126,7 @@ public class DocumentoController : ControllerBase
         var (signerId, _, perfil) = GetSignerInfo();
         if (perfil == "empresa") return Forbid();
 
-        var base64 = await _documentoService.ObterAssinaturaPerfil(signerId);
+        var base64 = await _mediator.Send(new ObterAssinaturaPerfilQuery(signerId));
         return Ok(new AssinaturaPerfilResponseDto
         {
             Possui = !string.IsNullOrEmpty(base64),
@@ -168,7 +140,8 @@ public class DocumentoController : ControllerBase
         var (signerId, _, perfil) = GetSignerInfo();
         if (perfil == "empresa") return Forbid();
 
-        await _documentoService.SalvarAssinaturaPerfil(signerId, dto.AssinaturaBase64);
+        var command = new SalvarAssinaturaPerfilCommand(signerId, dto.AssinaturaBase64);
+        await _mediator.Send(command);
         return Ok(new { mensagem = "Assinatura salva no perfil." });
     }
 }

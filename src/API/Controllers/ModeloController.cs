@@ -1,8 +1,12 @@
 using GestaoRH.Application.Common.DTOs;
-using GestaoRH.Infrastructure.Data;
-using GestaoRH.Domain.Interfaces;
-using GestaoRH.Application.Common.Services;
-using GestaoRH.Infrastructure.Services;
+using GestaoRH.Application.Features.Modelos.Commands.ArquivarModelo;
+using GestaoRH.Application.Features.Modelos.Commands.AtualizarModelo;
+using GestaoRH.Application.Features.Modelos.Commands.CriarModelo;
+using GestaoRH.Application.Features.Modelos.Commands.DuplicarModelo;
+using GestaoRH.Application.Features.Modelos.Commands.PublicarModelo;
+using GestaoRH.Application.Features.Modelos.Queries.ListarModelos;
+using GestaoRH.Application.Features.Modelos.Queries.ObterModeloPorId;
+using MediatR;
 using Microsoft.AspNetCore.Mvc;
 
 namespace GestaoRH.API.Controllers;
@@ -11,108 +15,83 @@ namespace GestaoRH.API.Controllers;
 [Route("api/[controller]")]
 public class ModeloController : ControllerBase
 {
-    private readonly ModeloService _modeloService;
-    private readonly IUnitOfWork   _uof;
+    private readonly IMediator _mediator;
 
-    public ModeloController(ModeloService modeloService, IUnitOfWork uof)
+    public ModeloController(IMediator mediator)
     {
-        _modeloService = modeloService;
-        _uof           = uof;
+        _mediator = mediator;
     }
 
     /// <summary>Lista todos os modelos (tabela simplificada)</summary>
     [HttpGet]
     public async Task<IActionResult> Listar()
     {
-        var lista = await _modeloService.Listar();
-        return Ok(lista);
+        var result = await _mediator.Send(new ListarModelosQuery());
+        return Ok(result);
     }
 
     /// <summary>Retorna modelo completo (com seções/campos/assinantes)</summary>
     [HttpGet("{id:int}")]
     public async Task<IActionResult> ObterPorId(int id)
     {
-        try
-        {
-            var modelo = await _modeloService.ObterPorId(id);
-            return Ok(modelo);
-        }
-        catch (KeyNotFoundException ex) { return NotFound(ex.Message); }
+        var result = await _mediator.Send(new ObterModeloPorIdQuery(id));
+        return Ok(result);
     }
 
     /// <summary>Cria novo modelo como rascunho</summary>
     [HttpPost]
     public async Task<IActionResult> Criar([FromBody] ModeloCadastroDto dto)
     {
-        try
-        {
-            if (dto is null) return BadRequest("Body vazio.");
-            var modelo = await _modeloService.Criar(dto);
-            await _uof.CommitAsync();
-            return CreatedAtAction(nameof(ObterPorId), new { id = modelo.Id }, modelo);
-        }
-        catch (ArgumentException ex)        { return BadRequest(ex.Message); }
-        catch (Exception ex)                { return StatusCode(500, ex.Message); }
+        var command = new CriarModeloCommand(
+            dto.Nome,
+            dto.Descricao,
+            dto.Categoria,
+            dto.TipoUso,
+            dto.Secoes,
+            dto.Assinantes
+        );
+        var result = await _mediator.Send(command);
+        return CreatedAtAction(nameof(ObterPorId), new { id = result.Id }, result);
     }
 
     /// <summary>Atualiza modelo (re-salva seções e assinantes)</summary>
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Atualizar(int id, [FromBody] ModeloCadastroDto dto)
     {
-        try
-        {
-            if (dto is null) return BadRequest("Body vazio.");
-            var modelo = await _modeloService.Atualizar(id, dto);
-            await _uof.CommitAsync();
-            return Ok(modelo);
-        }
-        catch (KeyNotFoundException ex)      { return NotFound(ex.Message); }
-        catch (InvalidOperationException ex) { return Conflict(ex.Message); }
-        catch (ArgumentException ex)         { return BadRequest(ex.Message); }
-        catch (Exception ex)                 { return StatusCode(500, ex.Message); }
+        var command = new AtualizarModeloCommand(
+            id,
+            dto.Nome,
+            dto.Descricao,
+            dto.Categoria,
+            dto.TipoUso,
+            dto.Secoes,
+            dto.Assinantes
+        );
+        var result = await _mediator.Send(command);
+        return Ok(result);
     }
 
     /// <summary>Publica modelo (valida assinante obrigatório)</summary>
     [HttpPatch("{id:int}/publicar")]
     public async Task<IActionResult> Publicar(int id)
     {
-        try
-        {
-            await _modeloService.Publicar(id);
-            await _uof.CommitAsync();
-            return Ok(new { mensagem = "Modelo publicado com sucesso." });
-        }
-        catch (KeyNotFoundException ex)      { return NotFound(ex.Message); }
-        catch (InvalidOperationException ex) { return Conflict(ex.Message); }
-        catch (Exception ex)                 { return StatusCode(500, ex.Message); }
+        await _mediator.Send(new PublicarModeloCommand(id));
+        return Ok(new { mensagem = "Modelo publicado com sucesso." });
     }
 
     /// <summary>Arquiva modelo</summary>
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Arquivar(int id)
     {
-        try
-        {
-            await _modeloService.Arquivar(id);
-            await _uof.CommitAsync();
-            return NoContent();
-        }
-        catch (KeyNotFoundException ex) { return NotFound(ex.Message); }
-        catch (Exception ex)            { return StatusCode(500, ex.Message); }
+        await _mediator.Send(new ArquivarModeloCommand(id));
+        return NoContent();
     }
 
     /// <summary>Duplica modelo como novo rascunho</summary>
     [HttpPost("{id:int}/duplicar")]
     public async Task<IActionResult> Duplicar(int id)
     {
-        try
-        {
-            var modelo = await _modeloService.Duplicar(id);
-            await _uof.CommitAsync();
-            return CreatedAtAction(nameof(ObterPorId), new { id = modelo.Id }, modelo);
-        }
-        catch (KeyNotFoundException ex) { return NotFound(ex.Message); }
-        catch (Exception ex)            { return StatusCode(500, ex.Message); }
+        var result = await _mediator.Send(new DuplicarModeloCommand(id));
+        return CreatedAtAction(nameof(ObterPorId), new { id = result.Id }, result);
     }
 }
-

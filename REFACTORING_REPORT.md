@@ -64,8 +64,10 @@ Implementado o `ExceptionHandlingMiddleware`.
 
 ## 5. Status da Compilação
 - O projeto foi verificado via `dotnet build` e está compilando sem erros na nova estrutura.
-- O arquivo `FuncionarioService.cs` foi descontinuado e removido, servindo como modelo para a migração dos demais serviços.
+- Os arquivos de serviços legados (`FuncionarioService.cs`, `EmpresaService.cs`, `SetorService.cs`, `ModeloService.cs` e `DocumentoService.cs`) foram completamente descontinuados e removidos.
+- Adicionado o `ValidationBehavior` no pipeline do MediatR para validação automática com FluentValidation.
+- Aplicado o Princípio de Inversão de Dependência (DIP) para o serviço de PDF (`IPdfService`), garantindo conformidade total com os testes de arquitetura.
 
 ---
-**Data**: 11 de Maio de 2026  
-**Status**: Fase 1 (Fundação e Módulo Funcionario) Concluída.
+**Data**: 1 de Junho de 2026  
+**Status**: Refatoração Completa (Módulos Funcionário, Empresa, Setor, Modelo e Documento migrados com sucesso para Vertical Slices e Clean Architecture). PASS nos Testes de Arquitetura.
