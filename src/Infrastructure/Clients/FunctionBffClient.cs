@@ -22,7 +22,7 @@ public class FunctionBffClient : IBffFunctionClient
 
     public async Task<EnrichmentSummaryDto> GetSummaryAsync(int peopleCount, int documentsCount, CancellationToken cancellationToken = default)
     {
-        if (_options.UseMocks)
+        if (_options.UseMocks || _options.UseFunctionMocks)
         {
             return new EnrichmentSummaryDto(
                 "Resumo enriquecido pelo BFF em modo mock.",

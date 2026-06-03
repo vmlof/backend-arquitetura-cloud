@@ -27,8 +27,8 @@ public class DocumentsBffController : ControllerBase
         return Ok(response);
     }
 
-    [HttpGet("{id:int}")]
-    public async Task<IActionResult> GetById(int id, CancellationToken cancellationToken)
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetById(string id, CancellationToken cancellationToken)
     {
         var response = await _mediator.Send(new GetDocumentByIdQuery(id), cancellationToken);
         return response is null ? NotFound() : Ok(response);
@@ -41,15 +41,15 @@ public class DocumentsBffController : ControllerBase
         return Created(string.Empty, response);
     }
 
-    [HttpPut("{id:int}")]
-    public async Task<IActionResult> Update(int id, [FromBody] JsonObject payload, CancellationToken cancellationToken)
+    [HttpPut("{id}")]
+    public async Task<IActionResult> Update(string id, [FromBody] JsonObject payload, CancellationToken cancellationToken)
     {
         var response = await _documentsClient.UpdateAsync(id, payload, cancellationToken);
         return Ok(response);
     }
 
-    [HttpDelete("{id:int}")]
-    public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken)
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> Delete(string id, CancellationToken cancellationToken)
     {
         await _documentsClient.DeleteAsync(id, cancellationToken);
         return NoContent();

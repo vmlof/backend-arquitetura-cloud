@@ -10,6 +10,9 @@
 
     <ItemGroup>
         <Compile Remove="ArchitectureTests\\**\\*.cs" />
+        <Content Remove="ArchitectureTests\\**\\*" />
+        <EmbeddedResource Remove="ArchitectureTests\\**\\*" />
+        <None Remove="ArchitectureTests\\**\\*" />
     </ItemGroup>
 
     <ItemGroup>

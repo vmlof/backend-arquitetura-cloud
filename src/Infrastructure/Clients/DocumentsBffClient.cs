@@ -23,24 +23,26 @@ public class DocumentsBffClient : IBffDocumentsClient
 
     public async Task<IReadOnlyCollection<DocumentSummaryDto>> ListAsync(CancellationToken cancellationToken = default)
     {
-        if (_options.UseMocks)
+        if (_options.UseMocks || _options.UseDocumentsMocks)
         {
             return
             [
-                new(101, "Contrato de Admissao", "admission", "Ana Souza", "pending"),
-                new(102, "Termo de Ferias", "vacation", "Carlos Lima", "signed"),
-                new(103, "Atestado Medico", "medical", "Marina Costa", "review")
+                new("101", "Contrato de Admissao", "admission", "Ana Souza", "pending"),
+                new("102", "Termo de Ferias", "vacation", "Carlos Lima", "signed"),
+                new("103", "Atestado Medico", "medical", "Marina Costa", "review")
             ];
         }
 
         EnsureConfigured(_options.DocumentsBaseUrl, "DocumentsBaseUrl");
-        return await _httpClient.GetFromJsonAsync<IReadOnlyCollection<DocumentSummaryDto>>("", JsonOptions, cancellationToken)
+        var response = await _httpClient.GetFromJsonAsync<IReadOnlyCollection<DocumentsServiceDocumentDto>>("", JsonOptions, cancellationToken)
             ?? [];
+
+        return response.Select(MapToSummary).ToList();
     }
 
-    public async Task<DocumentDetailDto?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
+    public async Task<DocumentDetailDto?> GetByIdAsync(string id, CancellationToken cancellationToken = default)
     {
-        if (_options.UseMocks)
+        if (_options.UseMocks || _options.UseDocumentsMocks)
         {
             var documents = await ListAsync(cancellationToken);
             return documents
@@ -57,12 +59,13 @@ public class DocumentsBffClient : IBffDocumentsClient
         }
 
         EnsureConfigured(_options.DocumentsBaseUrl, "DocumentsBaseUrl");
-        return await _httpClient.GetFromJsonAsync<DocumentDetailDto>($"{id}", JsonOptions, cancellationToken);
+        var response = await _httpClient.GetFromJsonAsync<DocumentsServiceDocumentDto>($"{id}", JsonOptions, cancellationToken);
+        return response is null ? null : MapToDetail(response);
     }
 
     public Task<JsonNode?> CreateAsync(JsonObject payload, CancellationToken cancellationToken = default)
     {
-        if (_options.UseMocks)
+        if (_options.UseMocks || _options.UseDocumentsMocks)
         {
             payload["id"] = 999;
             payload["source"] = "mock-documents-service";
@@ -73,9 +76,9 @@ public class DocumentsBffClient : IBffDocumentsClient
         return SendAsync(HttpMethod.Post, "", payload, cancellationToken);
     }
 
-    public Task<JsonNode?> UpdateAsync(int id, JsonObject payload, CancellationToken cancellationToken = default)
+    public Task<JsonNode?> UpdateAsync(string id, JsonObject payload, CancellationToken cancellationToken = default)
     {
-        if (_options.UseMocks)
+        if (_options.UseMocks || _options.UseDocumentsMocks)
         {
             payload["id"] = id;
             payload["source"] = "mock-documents-service";
@@ -86,9 +89,9 @@ public class DocumentsBffClient : IBffDocumentsClient
         return SendAsync(HttpMethod.Put, $"{id}", payload, cancellationToken);
     }
 
-    public async Task DeleteAsync(int id, CancellationToken cancellationToken = default)
+    public async Task DeleteAsync(string id, CancellationToken cancellationToken = default)
     {
-        if (_options.UseMocks)
+        if (_options.UseMocks || _options.UseDocumentsMocks)
         {
             await Task.CompletedTask;
             return;
@@ -118,4 +121,38 @@ public class DocumentsBffClient : IBffDocumentsClient
             throw new InvalidOperationException($"Configure DownstreamServices:{settingName} para usar o BFF sem mocks.");
         }
     }
+
+    private static DocumentSummaryDto MapToSummary(DocumentsServiceDocumentDto document)
+    {
+        return new DocumentSummaryDto(
+            document.Id,
+            document.Title,
+            document.Category,
+            document.OwnerName,
+            document.Status);
+    }
+
+    private static DocumentDetailDto MapToDetail(DocumentsServiceDocumentDto document)
+    {
+        return new DocumentDetailDto(
+            document.Id,
+            document.Title,
+            document.Category,
+            document.OwnerName,
+            document.Status,
+            document.UpdatedAtUtc,
+            "documents-mongodb-service");
+    }
+
+    private sealed record DocumentsServiceDocumentDto(
+        string Id,
+        string Title,
+        string Category,
+        string OwnerId,
+        string OwnerName,
+        string Status,
+        string Content,
+        IReadOnlyCollection<string> Tags,
+        DateTimeOffset CreatedAtUtc,
+        DateTimeOffset UpdatedAtUtc);
 }
