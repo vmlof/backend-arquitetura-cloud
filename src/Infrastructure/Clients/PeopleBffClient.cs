@@ -52,6 +52,7 @@ public class PeopleBffClient : IBffPeopleClient
                     x.Department,
                     x.Email,
                     x.Status,
+                    "Responsável pelo departamento de " + x.Department + ".",
                     DateTimeOffset.UtcNow.AddMinutes(-15),
                     "mock-people-service"))
                 .FirstOrDefault();
