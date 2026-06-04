@@ -19,14 +19,14 @@ public record PersonDetailDto(
     string Source);
 
 public record DocumentSummaryDto(
-    int Id,
+    string Id,
     string Title,
     string Category,
     string Owner,
     string Status);
 
 public record DocumentDetailDto(
-    int Id,
+    string Id,
     string Title,
     string Category,
     string Owner,

@@ -23,7 +23,7 @@ public class PeopleBffClient : IBffPeopleClient
 
     public async Task<IReadOnlyCollection<PersonSummaryDto>> ListAsync(CancellationToken cancellationToken = default)
     {
-        if (_options.UseMocks)
+        if (_options.UseMocks || _options.UsePeopleMocks)
         {
             return
             [
@@ -40,7 +40,7 @@ public class PeopleBffClient : IBffPeopleClient
 
     public async Task<PersonDetailDto?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
     {
-        if (_options.UseMocks)
+        if (_options.UseMocks || _options.UsePeopleMocks)
         {
             var people = await ListAsync(cancellationToken);
             return people
@@ -63,7 +63,7 @@ public class PeopleBffClient : IBffPeopleClient
 
     public Task<JsonNode?> CreateAsync(JsonObject payload, CancellationToken cancellationToken = default)
     {
-        if (_options.UseMocks)
+        if (_options.UseMocks || _options.UsePeopleMocks)
         {
             payload["id"] = 999;
             payload["source"] = "mock-people-service";
@@ -76,7 +76,7 @@ public class PeopleBffClient : IBffPeopleClient
 
     public Task<JsonNode?> UpdateAsync(int id, JsonObject payload, CancellationToken cancellationToken = default)
     {
-        if (_options.UseMocks)
+        if (_options.UseMocks || _options.UsePeopleMocks)
         {
             payload["id"] = id;
             payload["source"] = "mock-people-service";
@@ -89,7 +89,7 @@ public class PeopleBffClient : IBffPeopleClient
 
     public async Task DeleteAsync(int id, CancellationToken cancellationToken = default)
     {
-        if (_options.UseMocks)
+        if (_options.UseMocks || _options.UsePeopleMocks)
         {
             await Task.CompletedTask;
             return;

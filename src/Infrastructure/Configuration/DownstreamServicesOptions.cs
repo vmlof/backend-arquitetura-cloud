@@ -5,6 +5,9 @@ public class DownstreamServicesOptions
     public const string SectionName = "DownstreamServices";
 
     public bool UseMocks { get; set; } = true;
+    public bool UsePeopleMocks { get; set; } = true;
+    public bool UseDocumentsMocks { get; set; } = false;
+    public bool UseFunctionMocks { get; set; } = true;
     public string PeopleBaseUrl { get; set; } = string.Empty;
     public string DocumentsBaseUrl { get; set; } = string.Empty;
     public string FunctionBaseUrl { get; set; } = string.Empty;

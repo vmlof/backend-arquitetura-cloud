@@ -3,4 +3,4 @@ using MediatR;
 
 namespace GestaoRH.Application.Features.Bff.Documents.Queries.GetDocumentById;
 
-public record GetDocumentByIdQuery(int Id) : IRequest<DocumentDetailDto?>;
+public record GetDocumentByIdQuery(string Id) : IRequest<DocumentDetailDto?>;

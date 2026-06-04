@@ -49,7 +49,7 @@ A solução será composta pelos seguintes componentes:
 ### 🔹 3. Microserviço 1 (MongoDB)
 
 - Banco: MongoDB Atlas (Free Tier)
-- Responsável por um domínio (ex: Produtos)
+- Responsável por um domínio (Documento)
 - CRUD completo
 - Swagger documentado
 
@@ -58,7 +58,7 @@ A solução será composta pelos seguintes componentes:
 ### 🔹 4. Microserviço 2 (Azure SQL)
 
 - Banco: Azure SQL Database (Free 1 DTU)
-- Responsável por outro domínio (ex: Pedidos)
+- Responsável por outro domínio (People)
 - CRUD completo
 - Swagger documentado
 

@@ -1,12 +1,12 @@
 # Contexto da Etapa 2 - BFF
 
-Este arquivo registra o contexto completo do que foi feito no item 2 da atividade para manter continuidade nas proximas conversas e nas proximas entregas.
+Este arquivo registra o contexto completo do que foi feito no item 2 da atividade e as evolucoes posteriores dessa camada, para manter continuidade nas proximas conversas e nas proximas entregas.
 
 ## Objetivo desta etapa
 
 Transformar o backend atual em uma base de **BFF (Backend for Frontend)** alinhada com o PJBL da disciplina, preservando o uso de **C# / ASP.NET Core** e reaproveitando a estrutura arquitetural que ja existia no projeto.
 
-A meta desta etapa foi atender especificamente o item:
+A meta inicial desta etapa foi atender especificamente o item:
 
 `2. BFF (Backend for Frontend)`
 
@@ -33,7 +33,8 @@ Com isso, a decisao foi:
 - manter o backend em C#
 - reposicionar o projeto como **BFF da solucao**
 - expor endpoints orientados ao frontend
-- deixar os microservicos reais para as proximas etapas
+- desacoplar o frontend dos microservicos
+- evoluir gradualmente a integracao real com os servicos externos
 
 ## Relacao com a Etapa 1
 
@@ -47,9 +48,9 @@ Os contratos esperados pelo frontend eram:
 - `GET /documents`
 - `GET /documents/:id`
 
-Nesta etapa, o backend foi adaptado para entregar essa base de contrato, sem conectar ainda nos microservicos reais.
+O BFF foi implementado justamente para ser a unica porta de entrada do frontend.
 
-## O que foi implementado nesta atualizacao
+## O que foi implementado originalmente no BFF
 
 ### 1. Novo papel do projeto
 
@@ -91,11 +92,9 @@ Ele foi implementado para:
 - consultar o client da function
 - montar uma unica resposta para o frontend
 
-Mesmo em modo mock, o fluxo ja representa o papel do BFF.
-
 ### 4. Clients downstream
 
-Foram criados clientes dedicados para os servicos que o BFF vai consumir futuramente:
+Foram criados clientes dedicados para os servicos que o BFF consome ou consumira:
 
 - `PeopleBffClient`
 - `DocumentsBffClient`
@@ -125,45 +124,84 @@ Isso garante:
 - aderencia a Vertical Slice
 - separacao clara entre contratos do BFF e regras dos dominios antigos
 
-### 6. Configuracao para mocks e integracao futura
+## Evolucao posterior: integracao com Microservico 1 MongoDB
 
-Foi adicionada a secao:
+Depois da criacao do microservico 1, foi feita a primeira integracao real do BFF com um servico externo da arquitetura.
+
+### Dominio integrado
+
+O primeiro dominio integrado foi:
+
+- `Documents`
+
+### Tipo de microservico integrado
+
+Esse dominio passou a ser atendido por:
+
+- microservico independente
+- banco MongoDB Atlas
+- CRUD real
+
+### O que mudou no BFF nessa evolucao
+
+O BFF deixou de usar mock para `documents` e passou a consumir o microservico real na porta local:
+
+- `http://localhost:5102/api/documents/`
+
+Foram feitos os seguintes ajustes:
+
+- `DocumentsBffClient` passou a consumir o endpoint real do microservico
+- o contrato de `documents` foi ajustado para aceitar `id` como `string`
+- o controller `DocumentsBffController` foi ajustado para rotas com `id` string
+- o BFF passou a mapear o contrato real do microservico para o formato que o frontend espera
+
+### Estado atual dos downstreams
+
+Hoje, o estado do BFF e:
+
+- `people`: ainda em mock
+- `documents`: integrado ao microservico real MongoDB
+- `function`: ainda em mock
+
+## Configuracao atual
+
+Foi mantida a secao:
 
 - `DownstreamServices`
 
-com campos para:
+Mas ela evoluiu para um modelo mais granular.
 
-- `UseMocks`
-- `PeopleBaseUrl`
-- `DocumentsBaseUrl`
-- `FunctionBaseUrl`
-- `FunctionSummaryPath`
+Configuracao conceitual atual:
 
-Nesta etapa, o projeto ficou configurado com:
+```json
+"DownstreamServices": {
+  "UseMocks": false,
+  "UsePeopleMocks": true,
+  "UseDocumentsMocks": false,
+  "UseFunctionMocks": true,
+  "PeopleBaseUrl": "http://localhost:5101/",
+  "DocumentsBaseUrl": "http://localhost:5102/api/documents/",
+  "FunctionBaseUrl": "http://localhost:7071/",
+  "FunctionSummaryPath": "api/enrichment-summary"
+}
+```
 
-- `UseMocks = true`
+Isso permite:
 
-Isso permite demonstrar o BFF mesmo antes dos microservicos e da Azure Function estarem prontos.
+- usar integracao real para `documents`
+- manter `people` em mock
+- manter `function` em mock
+- continuar evoluindo sem bloquear a arquitetura toda
 
-### 7. CORS adaptado para o frontend
+## CORS adaptado para o frontend
 
 O CORS foi ampliado para aceitar origens locais usuais do frontend em desenvolvimento, especialmente as portas comuns da shell e dos remotes.
 
-Isso facilita a integracao futura entre:
+Isso facilita a integracao entre:
 
 - shell
 - microfrontends
 - BFF local
-
-### 8. Documentacao atualizada
-
-O `README.md` foi reescrito para refletir o novo papel do projeto como BFF e explicar:
-
-- objetivo
-- endpoints
-- configuracao
-- forma de execucao
-- evolucao futura
 
 ## Estrutura criada ou destacada nesta etapa
 
@@ -207,36 +245,56 @@ Neste ponto do projeto, o BFF ficou assim:
 - com Vertical Slice preservado
 - com endpoints voltados ao frontend
 - com agregacao pronta
-- com proxy CRUD pronto em estrutura
+- com proxy CRUD pronto
 - com clients desacoplados para servicos externos
-- com modo mock para demonstracao
+- com integracao real no dominio `documents`
+- com mocks ainda ativos para `people` e `function`
 
 Em outras palavras:
 
 - o BFF ja existe conceitualmente e tecnicamente
-- a integracao real ainda nao existe
-- a arquitetura ja esta pronta para receber os microservicos nas proximas etapas
+- a primeira integracao real com microservico ja existe
+- a arquitetura esta parcialmente real e parcialmente mockada
+- isso permite validar o fluxo `frontend -> BFF -> microservico 1`
 
-## O que ainda NAO foi feito nesta etapa
+## Fluxo funcional atual
 
-Esses pontos ficaram para as proximas fases:
+Hoje o fluxo que ja pode ser demonstrado e:
 
-- conectar `PeopleBffClient` ao microservico Mongo real
-- conectar `DocumentsBffClient` ao microservico SQL real
-- conectar `FunctionBffClient` a Azure Function real
-- alinhar payloads reais de entrada e saida
+1. usuario acessa o microfrontend
+2. frontend chama o BFF
+3. BFF responde `people` por mock
+4. BFF chama o microservico `Documents`
+5. microservico consulta o MongoDB Atlas
+6. BFF devolve os dados para o frontend
+
+No caso do endpoint agregado:
+
+- `people` vem de mock
+- `documents` vem do microservico real MongoDB
+- `function` vem de mock
+
+## O que ainda NAO foi feito
+
+Esses pontos continuam para as proximas fases:
+
+- implementar o microservico real de `people`
+- conectar `PeopleBffClient` ao servico real
+- implementar a Azure Function real
+- conectar `FunctionBffClient`
+- tornar `GET /aggregated-data` totalmente real
 - decidir autenticacao final do BFF no fluxo da entrega
 - integrar API Gateway na frente do BFF
 - publicar imagem Docker do BFF
 
 ## Como esta previsto que vai ficar depois
 
-Quando os itens 3 e 4 estiverem prontos, o fluxo esperado sera:
+Quando os itens 3 e 4 estiverem completos, o fluxo esperado sera:
 
 1. usuario acessa a shell do microfrontend
 2. shell chama o BFF
-3. BFF chama o microservico de pessoas/produtos no Mongo
-4. BFF chama o microservico de documentos/pedidos no SQL
+3. BFF chama o microservico de `people`
+4. BFF chama o microservico de `documents`
 5. BFF chama a Azure Function para enriquecimento ou calculo
 6. BFF agrega a resposta
 7. frontend recebe um unico JSON pronto para uso
@@ -249,6 +307,12 @@ Hoje o BFF esta pronto para entregar:
 - acesso a people
 - acesso a documents
 
+Mas com o seguinte estado:
+
+- `documents` real
+- `people` mock
+- `function` mock
+
 Depois, ele deve evoluir para:
 
 - autenticar o frontend
@@ -259,28 +323,22 @@ Depois, ele deve evoluir para:
 
 ## Validacao realizada
 
-Foi validado nesta etapa:
+Ao longo da evolucao do BFF, foi validado:
 
 - `dotnet build`
 - `dotnet test`
 
-Resultado:
+Resultado atual:
 
 - build com sucesso
 - testes de arquitetura aprovados
-
-Observacoes encontradas:
-
-- existe um warning de versao entre `AutoMapper` e `AutoMapper.Extensions.Microsoft.DependencyInjection`
-- existe tambem um warning relacionado ao `Microsoft.NET.Test.Sdk` no mesmo projeto principal
-
-Esses pontos nao bloquearam a entrega da etapa 2, mas podem ser limpos depois.
+- BFF compilando com a integracao do microservico `documents`
 
 ## Premissas para as proximas conversas
 
 Para manter consistencia nas proximas etapas, considerar sempre:
 
-1. Este repositorio agora representa o **BFF** da solucao.
+1. Este repositorio representa o **BFF** da solucao.
 2. O frontend deve continuar consumindo somente o BFF.
 3. Nao devemos ligar o frontend diretamente aos microservicos.
 4. Os endpoints publicos principais do frontend devem ser preservados:
@@ -288,31 +346,31 @@ Para manter consistencia nas proximas etapas, considerar sempre:
    - `/people`
    - `/documents`
 5. A integracao real com microservicos deve entrar por `HttpClient` e interfaces ja criadas.
-6. O modo mock deve ser usado enquanto os servicos reais nao estiverem prontos.
-7. A arquitetura academica precisa continuar explicavel em termos de:
+6. Hoje o dominio `documents` ja esta real.
+7. Hoje `people` e `function` ainda usam mock.
+8. A arquitetura academica precisa continuar explicavel em termos de:
    - BFF
    - Clean Architecture
    - Vertical Slice
    - agregacao
    - proxy
+   - integracao progressiva com microservicos
 
 ## Sugestao natural de continuidade
 
 A sequencia mais natural a partir daqui e:
 
-1. definir o dominio real do microservico 1
-2. implementar o microservico 1 no MongoDB
-3. alinhar o contrato do BFF com esse microservico
-4. definir o dominio real do microservico 2
-5. implementar o microservico 2 no Azure SQL
-6. alinhar o contrato do BFF com esse microservico
-7. criar a Azure Function
-8. trocar `UseMocks` para `false`
-9. integrar tudo no endpoint `/aggregated-data`
+1. implementar o microservico 2
+2. definir o dominio real de `people`
+3. integrar `PeopleBffClient` ao novo servico
+4. criar a Azure Function
+5. integrar a function ao BFF
+6. deixar `GET /aggregated-data` totalmente real
+7. depois pensar em API Gateway e publicacao
 
 ## Arquivos mais importantes para retomar rapido
 
-Se precisarmos retomar rapido a etapa 2 depois, olhar primeiro:
+Se precisarmos retomar rapido a etapa do BFF depois, olhar primeiro:
 
 - `src/API/Program.cs`
 - `src/API/Controllers/AggregatedDataController.cs`
@@ -323,12 +381,17 @@ Se precisarmos retomar rapido a etapa 2 depois, olhar primeiro:
 - `src/Infrastructure/Clients/PeopleBffClient.cs`
 - `src/Infrastructure/Clients/DocumentsBffClient.cs`
 - `src/Infrastructure/Clients/FunctionBffClient.cs`
+- `src/Infrastructure/Configuration/DownstreamServicesOptions.cs`
 - `appsettings.json`
 - `README.md`
 - `ContextoBFF.md`
 
 ## Observacao final
 
-Nesta etapa, o mais importante nao foi conectar tudo de fato, e sim posicionar corretamente o projeto no papel de BFF dentro da arquitetura distribuida da disciplina.
+Neste momento, o BFF ja deixou de ser apenas uma estrutura preparada para o futuro e passou a participar de uma integracao real com o microservico 1.
 
-Com isso, a base ficou pronta para evoluir sem retrabalho nas proximas fases, mantendo coerencia com o microfrontend da etapa 1 e com os futuros microservicos das etapas 3 e 4.
+Isso significa que a arquitetura ja possui uma base concreta e demonstravel do fluxo:
+
+- `frontend -> BFF -> microservico -> MongoDB Atlas`
+
+Com isso, a proxima etapa natural e repetir essa evolucao para o microservico 2, mantendo o mesmo principio de desacoplamento e evolucao incremental da arquitetura distribuida.
