@@ -15,6 +15,7 @@ public record PersonDetailDto(
     string Department,
     string Email,
     string Status,
+    string Summary,
     DateTimeOffset LastUpdatedAtUtc,
     string Source);
 
