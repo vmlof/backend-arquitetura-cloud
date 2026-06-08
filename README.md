@@ -1,8 +1,8 @@
 # GestaoRH BFF
 
-Backend for Frontend em **ASP.NET Core / C#** para a entrega do item 2 do PJBL de Arquitetura.
+Backend for Frontend em **ASP.NET Core / C#** para a arquitetura distribuida do PJBL.
 
-Este projeto foi adaptado para atuar como a camada intermediaria entre o microfrontend e os servicos de backend. Nesta etapa ele ja entrega a estrutura de **BFF**, com endpoints de agregacao e proxy, mantendo a base existente de **Clean Architecture** e **Vertical Slice**.
+Este projeto atua como a camada intermediaria oficial entre o microfrontend e os servicos de backend. Ele centraliza contratos HTTP voltados ao frontend, agrega respostas e isola os clientes das mudancas internas dos microservicos.
 
 ## Papel do projeto na arquitetura
 
@@ -12,11 +12,11 @@ O BFF e o unico backend consumido pelo frontend. Ele concentra:
 - proxy de chamadas de `people`
 - proxy de chamadas de `documents`
 - ponto de integracao com Azure Function
-- isolamento do frontend em relacao aos microservicos reais
+- adaptacao de contratos entre frontend e microservicos
 
-## Endpoints BFF desta etapa
+## Endpoints BFF
 
-Os endpoints abaixo ficam expostos sem o prefixo `/api`, porque sao os contratos esperados pelo microfrontend:
+Os endpoints abaixo ficam expostos sem o prefixo `/api`, porque esse e o formato esperado pelo microfrontend:
 
 | Metodo | Rota | Objetivo |
 |---|---|---|
@@ -32,34 +32,68 @@ Os endpoints abaixo ficam expostos sem o prefixo `/api`, porque sao os contratos
 | PUT | `/documents/{id}` | Proxy de atualizacao |
 | DELETE | `/documents/{id}` | Proxy de exclusao |
 
-## Como a integracao esta preparada
+## Estado atual da integracao
 
-Nesta fase o BFF roda em dois modos:
+Neste momento, o BFF esta em estado hibrido:
 
-- `UseMocks = true`
-  - responde com dados mockados
-  - permite demonstrar o BFF antes dos microservicos existirem
-- `UseMocks = false`
-  - passa a usar `HttpClient`
-  - encaminha chamadas para os servicos configurados em `DownstreamServices`
+- `people`
+  - integrado ao Microservico 2 real
+  - servico externo em Azure SQL
+- `documents`
+  - integrado ao Microservico 1 real
+  - servico externo em MongoDB Atlas
+- `function`
+  - ainda em mock
+
+Isso significa que o endpoint `GET /aggregated-data` hoje compoe:
+
+- `people` real
+- `documents` real
+- `function` mock
+
+## Configuracao atual
 
 Configuracao atual em [appsettings.json](/C:/Users/pcesa/OneDrive/PUC-%20BES/6%20Semestre/Arquitetura/backend-arquitetura-cloud/appsettings.json:1):
 
 ```json
 "DownstreamServices": {
-  "UseMocks": true,
-  "PeopleBaseUrl": "http://localhost:5101/",
-  "DocumentsBaseUrl": "http://localhost:5102/",
+  "UseMocks": false,
+  "UsePeopleMocks": false,
+  "UseDocumentsMocks": false,
+  "UseFunctionMocks": true,
+  "PeopleBaseUrl": "http://localhost:5096/api/people/",
+  "DocumentsBaseUrl": "http://localhost:5102/api/documents/",
   "FunctionBaseUrl": "http://localhost:7071/",
   "FunctionSummaryPath": "api/enrichment-summary"
 }
 ```
 
-Quando os microservicos e a Azure Function estiverem prontos, basta:
+### Significado da configuracao
 
-1. alterar `UseMocks` para `false`
-2. apontar as URLs corretas
-3. alinhar os contratos dos payloads de `people` e `documents`
+- `UseMocks = false`
+  - desliga o modo totalmente mockado
+- `UsePeopleMocks = false`
+  - faz o BFF consumir o microservico real de `people`
+- `UseDocumentsMocks = false`
+  - faz o BFF consumir o microservico real de `documents`
+- `UseFunctionMocks = true`
+  - mantem a function em mock ate a etapa correspondente
+
+## Downstreams integrados
+
+### Microservico 1 - Documents
+
+- tecnologia: ASP.NET Core
+- banco: MongoDB Atlas
+- URL esperada no BFF:
+  - `http://localhost:5102/api/documents/`
+
+### Microservico 2 - People
+
+- tecnologia: ASP.NET Core
+- banco: Azure SQL Database
+- URL esperada no BFF:
+  - `http://localhost:5096/api/people/`
 
 ## Estrutura arquitetural relevante
 
@@ -106,6 +140,8 @@ src
 ### Pre-requisitos
 
 - .NET SDK 9
+- Microservico `Documents` rodando
+- Microservico `People` rodando
 
 ### Execucao
 
@@ -119,12 +155,21 @@ Documentacao OpenAPI:
 - JSON: `http://localhost:5000/openapi/v1.json`
 - Scalar: `http://localhost:5000/scalar`
 
+## Fluxo atual da solucao
+
+1. o frontend chama o BFF
+2. o BFF consulta `people` no microservico SQL
+3. o BFF consulta `documents` no microservico Mongo
+4. o BFF consulta a function mock
+5. o frontend recebe um contrato unificado
+
 ## Observacoes importantes para a entrega
 
-- Este projeto agora representa o **BFF** da solucao.
-- A conexao real com os microservicos sera feita nas proximas etapas.
-- A parte de Azure Function aqui ja esta preparada por configuracao e cliente dedicado.
-- A API antiga do projeto ainda existe no repositorio, mas o foco academico desta etapa passa a ser o contrato BFF acima.
+- Este projeto representa o **BFF** da solucao.
+- O frontend continua sem falar diretamente com microservicos.
+- A Azure Function ainda nao esta integrada de forma real.
+- O contrato de `documents` no BFF foi ajustado para `id` string, por causa do MongoDB.
+- O contrato de `people` continua com `id` inteiro, conforme o microservico SQL.
 
 ## Alunos
 

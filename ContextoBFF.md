@@ -124,13 +124,13 @@ Isso garante:
 - aderencia a Vertical Slice
 - separacao clara entre contratos do BFF e regras dos dominios antigos
 
-## Evolucao posterior: integracao com Microservico 1 MongoDB
+## Evolucao posterior: integracao com os microservicos reais
 
-Depois da criacao do microservico 1, foi feita a primeira integracao real do BFF com um servico externo da arquitetura.
+Depois da criacao dos microservicos, o BFF deixou de ser apenas uma estrutura preparada e passou a integrar servicos reais da arquitetura.
+
+## Integracao com Microservico 1 MongoDB
 
 ### Dominio integrado
-
-O primeiro dominio integrado foi:
 
 - `Documents`
 
@@ -155,11 +155,47 @@ Foram feitos os seguintes ajustes:
 - o controller `DocumentsBffController` foi ajustado para rotas com `id` string
 - o BFF passou a mapear o contrato real do microservico para o formato que o frontend espera
 
-### Estado atual dos downstreams
+## Integracao com Microservico 2 Azure SQL
+
+### Dominio integrado
+
+- `People`
+
+### Tipo de microservico integrado
+
+Esse dominio passou a ser atendido por:
+
+- microservico independente
+- banco Azure SQL Database
+- CRUD real
+
+### Contrato esperado do microservico 2
+
+De acordo com o repositorio do microservico 2, os endpoints esperados sao:
+
+- `GET /api/people`
+- `GET /api/people/{id}`
+- `POST /api/people`
+- `PUT /api/people/{id}`
+- `DELETE /api/people/{id}`
+
+### O que mudou no BFF nessa evolucao
+
+O BFF passou a apontar `people` para o microservico SQL real em:
+
+- `http://localhost:5096/api/people/`
+
+Como o contrato do microservico 2 segue um dominio relacional com `id` inteiro, o BFF manteve:
+
+- `PersonSummaryDto` com `Id` inteiro
+- `PersonDetailDto` com `Id` inteiro
+- rotas `/people/{id}` no BFF com identificador inteiro
+
+## Estado atual dos downstreams
 
 Hoje, o estado do BFF e:
 
-- `people`: ainda em mock
+- `people`: integrado ao microservico real Azure SQL
 - `documents`: integrado ao microservico real MongoDB
 - `function`: ainda em mock
 
@@ -176,10 +212,10 @@ Configuracao conceitual atual:
 ```json
 "DownstreamServices": {
   "UseMocks": false,
-  "UsePeopleMocks": true,
+  "UsePeopleMocks": false,
   "UseDocumentsMocks": false,
   "UseFunctionMocks": true,
-  "PeopleBaseUrl": "http://localhost:5101/",
+  "PeopleBaseUrl": "http://localhost:5096/api/people/",
   "DocumentsBaseUrl": "http://localhost:5102/api/documents/",
   "FunctionBaseUrl": "http://localhost:7071/",
   "FunctionSummaryPath": "api/enrichment-summary"
@@ -188,8 +224,8 @@ Configuracao conceitual atual:
 
 Isso permite:
 
+- usar integracao real para `people`
 - usar integracao real para `documents`
-- manter `people` em mock
 - manter `function` em mock
 - continuar evoluindo sem bloquear a arquitetura toda
 
@@ -248,14 +284,15 @@ Neste ponto do projeto, o BFF ficou assim:
 - com proxy CRUD pronto
 - com clients desacoplados para servicos externos
 - com integracao real no dominio `documents`
-- com mocks ainda ativos para `people` e `function`
+- com integracao real no dominio `people`
+- com mock ainda ativo para `function`
 
 Em outras palavras:
 
 - o BFF ja existe conceitualmente e tecnicamente
-- a primeira integracao real com microservico ja existe
-- a arquitetura esta parcialmente real e parcialmente mockada
-- isso permite validar o fluxo `frontend -> BFF -> microservico 1`
+- as duas integracoes principais com microservicos ja existem
+- a arquitetura esta majoritariamente real
+- isso permite validar o fluxo `frontend -> BFF -> microservicos`
 
 ## Fluxo funcional atual
 
@@ -263,23 +300,22 @@ Hoje o fluxo que ja pode ser demonstrado e:
 
 1. usuario acessa o microfrontend
 2. frontend chama o BFF
-3. BFF responde `people` por mock
+3. BFF chama o microservico `People`
 4. BFF chama o microservico `Documents`
-5. microservico consulta o MongoDB Atlas
-6. BFF devolve os dados para o frontend
+5. o microservico `People` consulta o Azure SQL
+6. o microservico `Documents` consulta o MongoDB Atlas
+7. BFF devolve os dados para o frontend
 
 No caso do endpoint agregado:
 
-- `people` vem de mock
-- `documents` vem do microservico real MongoDB
+- `people` vem do microservico SQL
+- `documents` vem do microservico MongoDB
 - `function` vem de mock
 
 ## O que ainda NAO foi feito
 
 Esses pontos continuam para as proximas fases:
 
-- implementar o microservico real de `people`
-- conectar `PeopleBffClient` ao servico real
 - implementar a Azure Function real
 - conectar `FunctionBffClient`
 - tornar `GET /aggregated-data` totalmente real
@@ -289,7 +325,7 @@ Esses pontos continuam para as proximas fases:
 
 ## Como esta previsto que vai ficar depois
 
-Quando os itens 3 e 4 estiverem completos, o fluxo esperado sera:
+Quando a etapa da function estiver completa, o fluxo esperado sera:
 
 1. usuario acessa a shell do microfrontend
 2. shell chama o BFF
@@ -309,8 +345,8 @@ Hoje o BFF esta pronto para entregar:
 
 Mas com o seguinte estado:
 
+- `people` real
 - `documents` real
-- `people` mock
 - `function` mock
 
 Depois, ele deve evoluir para:
@@ -332,7 +368,7 @@ Resultado atual:
 
 - build com sucesso
 - testes de arquitetura aprovados
-- BFF compilando com a integracao do microservico `documents`
+- BFF compilando com as integracoes de `people` e `documents`
 
 ## Premissas para as proximas conversas
 
@@ -347,8 +383,9 @@ Para manter consistencia nas proximas etapas, considerar sempre:
    - `/documents`
 5. A integracao real com microservicos deve entrar por `HttpClient` e interfaces ja criadas.
 6. Hoje o dominio `documents` ja esta real.
-7. Hoje `people` e `function` ainda usam mock.
-8. A arquitetura academica precisa continuar explicavel em termos de:
+7. Hoje o dominio `people` ja esta real.
+8. Hoje apenas `function` ainda usa mock.
+9. A arquitetura academica precisa continuar explicavel em termos de:
    - BFF
    - Clean Architecture
    - Vertical Slice
@@ -360,13 +397,11 @@ Para manter consistencia nas proximas etapas, considerar sempre:
 
 A sequencia mais natural a partir daqui e:
 
-1. implementar o microservico 2
-2. definir o dominio real de `people`
-3. integrar `PeopleBffClient` ao novo servico
-4. criar a Azure Function
-5. integrar a function ao BFF
-6. deixar `GET /aggregated-data` totalmente real
-7. depois pensar em API Gateway e publicacao
+1. implementar a Azure Function
+2. integrar a function ao BFF
+3. deixar `GET /aggregated-data` totalmente real
+4. depois pensar em API Gateway
+5. depois pensar em Docker Hub e publicacao
 
 ## Arquivos mais importantes para retomar rapido
 
@@ -388,10 +423,11 @@ Se precisarmos retomar rapido a etapa do BFF depois, olhar primeiro:
 
 ## Observacao final
 
-Neste momento, o BFF ja deixou de ser apenas uma estrutura preparada para o futuro e passou a participar de uma integracao real com o microservico 1.
+Neste momento, o BFF ja deixou de ser apenas uma estrutura preparada para o futuro e passou a participar de duas integracoes reais com os microservicos principais da arquitetura.
 
 Isso significa que a arquitetura ja possui uma base concreta e demonstravel do fluxo:
 
-- `frontend -> BFF -> microservico -> MongoDB Atlas`
+- `frontend -> BFF -> microservico People -> Azure SQL`
+- `frontend -> BFF -> microservico Documents -> MongoDB Atlas`
 
-Com isso, a proxima etapa natural e repetir essa evolucao para o microservico 2, mantendo o mesmo principio de desacoplamento e evolucao incremental da arquitetura distribuida.
+Com isso, a proxima etapa natural e concluir a parte de serverless para fechar o fluxo completo exigido pela atividade.
