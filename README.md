@@ -11,7 +11,7 @@ O BFF e o unico backend consumido pelo frontend. Ele concentra:
 - agregacao de dados para a tela principal
 - proxy de chamadas de `people`
 - proxy de chamadas de `documents`
-- ponto de integracao com Azure Function
+- integracao com Azure Function
 - adaptacao de contratos entre frontend e microservicos
 
 ## Endpoints BFF
@@ -34,7 +34,7 @@ Os endpoints abaixo ficam expostos sem o prefixo `/api`, porque esse e o formato
 
 ## Estado atual da integracao
 
-Neste momento, o BFF esta em estado hibrido:
+Neste momento, o BFF esta preparado para operar com os tres downstreams reais:
 
 - `people`
   - integrado ao Microservico 2 real
@@ -43,13 +43,15 @@ Neste momento, o BFF esta em estado hibrido:
   - integrado ao Microservico 1 real
   - servico externo em MongoDB Atlas
 - `function`
-  - ainda em mock
+  - integrado ao projeto Azure Function da etapa 5
+  - integracao pronta no codigo do BFF
+  - validacao em runtime ainda pendente
 
-Isso significa que o endpoint `GET /aggregated-data` hoje compoe:
+Isso significa que o endpoint `GET /aggregated-data` esta configurado para compor:
 
 - `people` real
 - `documents` real
-- `function` mock
+- `function` real
 
 ## Configuracao atual
 
@@ -60,7 +62,7 @@ Configuracao atual em [appsettings.json](/C:/Users/pcesa/OneDrive/PUC-%20BES/6%2
   "UseMocks": false,
   "UsePeopleMocks": false,
   "UseDocumentsMocks": false,
-  "UseFunctionMocks": true,
+  "UseFunctionMocks": false,
   "PeopleBaseUrl": "http://localhost:5096/api/people/",
   "DocumentsBaseUrl": "http://localhost:5102/api/documents/",
   "FunctionBaseUrl": "http://localhost:7071/",
@@ -76,8 +78,8 @@ Configuracao atual em [appsettings.json](/C:/Users/pcesa/OneDrive/PUC-%20BES/6%2
   - faz o BFF consumir o microservico real de `people`
 - `UseDocumentsMocks = false`
   - faz o BFF consumir o microservico real de `documents`
-- `UseFunctionMocks = true`
-  - mantem a function em mock ate a etapa correspondente
+- `UseFunctionMocks = false`
+  - faz o BFF consumir a Azure Function real
 
 ## Downstreams integrados
 
@@ -94,6 +96,18 @@ Configuracao atual em [appsettings.json](/C:/Users/pcesa/OneDrive/PUC-%20BES/6%2
 - banco: Azure SQL Database
 - URL esperada no BFF:
   - `http://localhost:5096/api/people/`
+
+### Azure Function - Enrichment Summary
+
+- tecnologia: Azure Functions .NET 8 isolated
+- rota esperada no BFF:
+  - `http://localhost:7071/api/enrichment-summary`
+
+URL de publicacao criada no Azure:
+
+- `https://func-pjbl-arquitetura-dpeye5c5cyd9gthe.centralus-01.azurewebsites.net`
+
+Quando a Function for publicada e validada, a URL local pode ser trocada pela URL publicada.
 
 ## Estrutura arquitetural relevante
 
@@ -142,6 +156,7 @@ src
 - .NET SDK 9
 - Microservico `Documents` rodando
 - Microservico `People` rodando
+- Azure Function rodando localmente em `http://localhost:7071/`
 
 ### Execucao
 
@@ -160,16 +175,17 @@ Documentacao OpenAPI:
 1. o frontend chama o BFF
 2. o BFF consulta `people` no microservico SQL
 3. o BFF consulta `documents` no microservico Mongo
-4. o BFF consulta a function mock
+4. o BFF consulta a Azure Function
 5. o frontend recebe um contrato unificado
 
 ## Observacoes importantes para a entrega
 
 - Este projeto representa o **BFF** da solucao.
 - O frontend continua sem falar diretamente com microservicos.
-- A Azure Function ainda nao esta integrada de forma real.
 - O contrato de `documents` no BFF foi ajustado para `id` string, por causa do MongoDB.
 - O contrato de `people` continua com `id` inteiro, conforme o microservico SQL.
+- A integracao da Azure Function esta pronta no codigo e na configuracao do BFF.
+- A validacao da Azure Function em runtime ainda precisa ser confirmada em ambiente com Azure Functions Core Tools.
 
 ## Alunos
 

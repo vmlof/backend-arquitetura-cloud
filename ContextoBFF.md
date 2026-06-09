@@ -191,13 +191,68 @@ Como o contrato do microservico 2 segue um dominio relacional com `id` inteiro, 
 - `PersonDetailDto` com `Id` inteiro
 - rotas `/people/{id}` no BFF com identificador inteiro
 
+## Integracao com Azure Function
+
+### Componente integrado
+
+- `EnrichmentSummaryFunction`
+
+### Tipo de componente
+
+- Azure Function HTTP Trigger
+- .NET 8 isolated worker
+- usada para enriquecimento e resumo do endpoint agregado
+
+### Contrato esperado da Function
+
+Rota:
+
+- `GET /api/enrichment-summary`
+
+Query params:
+
+- `peopleCount`
+- `documentsCount`
+
+Resposta esperada:
+
+- `message`
+- `totalPeople`
+- `totalDocuments`
+- `generatedAtUtc`
+- `source`
+
+### O que mudou no BFF nessa evolucao
+
+O BFF passou a estar configurado para consumir a Function em:
+
+- `http://localhost:7071/api/enrichment-summary`
+
+No cliente `FunctionBffClient`, o fluxo ficou:
+
+1. recebe totais de people e documents
+2. monta query string com `peopleCount` e `documentsCount`
+3. chama a Azure Function
+4. integra a resposta no `GET /aggregated-data`
+
+### Observacao importante sobre validacao
+
+A integracao da Function foi preparada no codigo e na configuracao do BFF, mas a validacao em runtime ficou pendente nesta etapa por indisponibilidade do ambiente local com Azure Functions Core Tools.
+
+Ou seja:
+
+- integracao pronta no codigo: sim
+- configuracao pronta: sim
+- build validado: sim
+- teste de execucao real da Function consumida pelo BFF: pendente
+
 ## Estado atual dos downstreams
 
 Hoje, o estado do BFF e:
 
 - `people`: integrado ao microservico real Azure SQL
 - `documents`: integrado ao microservico real MongoDB
-- `function`: ainda em mock
+- `function`: integrada no codigo e configuracao, pendente de validacao em runtime
 
 ## Configuracao atual
 
@@ -214,7 +269,7 @@ Configuracao conceitual atual:
   "UseMocks": false,
   "UsePeopleMocks": false,
   "UseDocumentsMocks": false,
-  "UseFunctionMocks": true,
+  "UseFunctionMocks": false,
   "PeopleBaseUrl": "http://localhost:5096/api/people/",
   "DocumentsBaseUrl": "http://localhost:5102/api/documents/",
   "FunctionBaseUrl": "http://localhost:7071/",
@@ -226,8 +281,8 @@ Isso permite:
 
 - usar integracao real para `people`
 - usar integracao real para `documents`
-- manter `function` em mock
-- continuar evoluindo sem bloquear a arquitetura toda
+- usar integracao real para `function`
+- deixar o BFF pronto para a fase seguinte
 
 ## CORS adaptado para o frontend
 
@@ -285,18 +340,18 @@ Neste ponto do projeto, o BFF ficou assim:
 - com clients desacoplados para servicos externos
 - com integracao real no dominio `documents`
 - com integracao real no dominio `people`
-- com mock ainda ativo para `function`
+- com integracao de `function` pronta no codigo
 
 Em outras palavras:
 
 - o BFF ja existe conceitualmente e tecnicamente
 - as duas integracoes principais com microservicos ja existem
-- a arquitetura esta majoritariamente real
-- isso permite validar o fluxo `frontend -> BFF -> microservicos`
+- a integracao serverless ja esta preparada
+- o unico ponto pendente e a validacao pratica da Function em execucao
 
 ## Fluxo funcional atual
 
-Hoje o fluxo que ja pode ser demonstrado e:
+Hoje o fluxo que ja pode ser demonstrado no codigo e:
 
 1. usuario acessa o microfrontend
 2. frontend chama o BFF
@@ -304,28 +359,28 @@ Hoje o fluxo que ja pode ser demonstrado e:
 4. BFF chama o microservico `Documents`
 5. o microservico `People` consulta o Azure SQL
 6. o microservico `Documents` consulta o MongoDB Atlas
-7. BFF devolve os dados para o frontend
+7. o BFF chama a Azure Function para enriquecimento
+8. o BFF devolve a resposta agregada ao frontend
 
-No caso do endpoint agregado:
+Do ponto de vista de validacao:
 
-- `people` vem do microservico SQL
-- `documents` vem do microservico MongoDB
-- `function` vem de mock
+- `people`: validado
+- `documents`: validado
+- `function`: preparada, ainda pendente de teste real
 
 ## O que ainda NAO foi feito
 
 Esses pontos continuam para as proximas fases:
 
-- implementar a Azure Function real
-- conectar `FunctionBffClient`
-- tornar `GET /aggregated-data` totalmente real
+- validar a Azure Function em runtime
+- confirmar o consumo real dela pelo `GET /aggregated-data`
 - decidir autenticacao final do BFF no fluxo da entrega
 - integrar API Gateway na frente do BFF
 - publicar imagem Docker do BFF
 
 ## Como esta previsto que vai ficar depois
 
-Quando a etapa da function estiver completa, o fluxo esperado sera:
+Quando a Function estiver validada em execucao, o fluxo esperado sera:
 
 1. usuario acessa a shell do microfrontend
 2. shell chama o BFF
@@ -347,7 +402,7 @@ Mas com o seguinte estado:
 
 - `people` real
 - `documents` real
-- `function` mock
+- `function` preparada para uso real, pendente de validacao pratica
 
 Depois, ele deve evoluir para:
 
@@ -368,7 +423,12 @@ Resultado atual:
 
 - build com sucesso
 - testes de arquitetura aprovados
-- BFF compilando com as integracoes de `people` e `documents`
+- BFF compilando com as integracoes de `people`, `documents` e `function`
+
+Observacao:
+
+- a compilacao e configuracao da Function foram preparadas
+- a execucao real dela ainda nao foi validada nesta etapa
 
 ## Premissas para as proximas conversas
 
@@ -384,7 +444,7 @@ Para manter consistencia nas proximas etapas, considerar sempre:
 5. A integracao real com microservicos deve entrar por `HttpClient` e interfaces ja criadas.
 6. Hoje o dominio `documents` ja esta real.
 7. Hoje o dominio `people` ja esta real.
-8. Hoje apenas `function` ainda usa mock.
+8. Hoje a integracao da `function` ja esta pronta no codigo.
 9. A arquitetura academica precisa continuar explicavel em termos de:
    - BFF
    - Clean Architecture
@@ -392,16 +452,16 @@ Para manter consistencia nas proximas etapas, considerar sempre:
    - agregacao
    - proxy
    - integracao progressiva com microservicos
+   - serverless
 
 ## Sugestao natural de continuidade
 
 A sequencia mais natural a partir daqui e:
 
-1. implementar a Azure Function
-2. integrar a function ao BFF
-3. deixar `GET /aggregated-data` totalmente real
-4. depois pensar em API Gateway
-5. depois pensar em Docker Hub e publicacao
+1. validar a Azure Function em runtime
+2. confirmar o `GET /aggregated-data` com os tres componentes
+3. seguir para o item 6 do API Gateway
+4. depois pensar em Docker Hub e publicacao
 
 ## Arquivos mais importantes para retomar rapido
 
@@ -423,11 +483,12 @@ Se precisarmos retomar rapido a etapa do BFF depois, olhar primeiro:
 
 ## Observacao final
 
-Neste momento, o BFF ja deixou de ser apenas uma estrutura preparada para o futuro e passou a participar de duas integracoes reais com os microservicos principais da arquitetura.
+Neste momento, o BFF ja deixou de ser apenas uma estrutura preparada para o futuro e passou a participar de duas integracoes reais com os microservicos principais da arquitetura, alem de ja estar configurado para consumir o componente serverless.
 
 Isso significa que a arquitetura ja possui uma base concreta e demonstravel do fluxo:
 
 - `frontend -> BFF -> microservico People -> Azure SQL`
 - `frontend -> BFF -> microservico Documents -> MongoDB Atlas`
+- `frontend -> BFF -> Azure Function`
 
-Com isso, a proxima etapa natural e concluir a parte de serverless para fechar o fluxo completo exigido pela atividade.
+Com isso, a proxima etapa natural e seguir para o item 6, mantendo registrado que a validacao pratica da Function ainda precisa ser confirmada em execucao.
