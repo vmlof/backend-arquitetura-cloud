@@ -13,6 +13,10 @@
         <Content Remove="ArchitectureTests\\**\\*" />
         <EmbeddedResource Remove="ArchitectureTests\\**\\*" />
         <None Remove="ArchitectureTests\\**\\*" />
+        <Compile Remove="UnitTests\\**\\*.cs" />
+        <Content Remove="UnitTests\\**\\*" />
+        <EmbeddedResource Remove="UnitTests\\**\\*" />
+        <None Remove="UnitTests\\**\\*" />
     </ItemGroup>
 
     <ItemGroup>
